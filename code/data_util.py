@@ -71,7 +71,7 @@ class RelTagDict(TagDict):
     def define(self, schema):
         relation_tags = [rel['tag'] for rel in schema['relation'].values()]
 
-        relation_tags = [schema.REL_NONE] + [schema.REL_PAD] + relation_tags
+        relation_tags = [schema.REL_PAD, schema.REL_NONE]  + relation_tags
         return relation_tags
 
     def ix_base_type(self, idx):
@@ -293,7 +293,7 @@ def prepare_rel(rel_padded, to_ix, max_len):
     for i, rel_seq in enumerate(rel_padded):
         rel_dict = {}
         for j, token_seq in enumerate(rel_seq):
-            rel_ptr[i][j][:j+1] = to_ix[Schema.REL_PAD]
+            rel_ptr[i][j][:j+1] = to_ix[Schema.REL_NONE]
             if token_seq != Schema.REL_NONE:
                 for k, rel in enumerate(token_seq):
 

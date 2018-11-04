@@ -5,7 +5,7 @@ import time
 import numpy as np
 from tqdm import tqdm
 
-# from evaluation import evaluate_data, decode_ent, decode_rel
+from evaluation import evaluate_data, decode_ent, decode_rel
 
 
 
@@ -191,15 +191,15 @@ class JointERE(nn.Module):
     
     def score(self, loader, isTrueEnt=False, silent=False, rel_detail=False):
         
-        e_score, er_scores = evaluate_data(self, loader, self.schema, isTrueEnt, silent, rel_detail)
+        e_score, er_score = evaluate_data(self, loader, self.schema, isTrueEnt, silent, rel_detail)
         
-        return e_score, best_er_score
+        return e_score, er_score
     
     
     
     
     
-    def save_model(self, name='relation_extraction_1_new.pkl'):
+    def save_model(self, name='relation_extraction_1_new.pth'):
         torch.save(self.state_dict(), name)
                 
         

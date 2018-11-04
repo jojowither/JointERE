@@ -1,1 +1,1 @@
-# entity_typing
+# Joint Entity and Relation mention Extraction on Traditional Chinese text

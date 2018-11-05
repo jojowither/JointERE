@@ -82,10 +82,11 @@ class RelTagDict(TagDict):
 
 class BIOLoader(Data.DataLoader):
     
-    def __init__(self, data_path, max_len, batch_size, schema, word_to_ix=None, shuffle=False, device=torch.device('cpu')):
+    def __init__(self, data_path, max_len, batch_size, schema, rel_be_filtered=None, 
+                 word_to_ix=None, shuffle=False, device=torch.device('cpu')):
         self.max_len = max_len
                 
-        results = self.preprocess(data_path, word_to_ix, schema)
+        results = self.preprocess(data_path, word_to_ix, schema, rel_be_filtered)
                                                                      
         torch_dataset = Data.TensorDataset(*(x.to(device) for x in results))
         
@@ -101,11 +102,11 @@ class BIOLoader(Data.DataLoader):
     
     '''
     function split_to_list()
-    arg *isfilter_r and *rel_be_filtered need not be filled if not in experiment
+    arg rel_be_filtered need not be filled if not in experiment
     '''
-    def preprocess(self, data, word_to_ix, schema):
+    def preprocess(self, data, word_to_ix, schema, rel_be_filtered=None):
         content = readfile(data)
-        sent_list, ent_list, rel_list = split_to_list(content)
+        sent_list, ent_list, rel_list = split_to_list(content, rel_be_filtered)
         word_to_ix = word_to_ix or word2index(sent_list)
         reserved_index = filter_len(sent_list, self.max_len)
         filter_word, filter_ent, filter_rel = filter_sentence(reserved_index, sent_list, ent_list, rel_list)
@@ -121,6 +122,7 @@ class BIOLoader(Data.DataLoader):
         self.raw_input = sent_list
 
         reserved_index = torch.from_numpy(np.asarray(reserved_index))
+        
 
         return input_var, ent_var, rel_var, reserved_index
 
@@ -150,7 +152,7 @@ def filter_relation(word_set, rel_be_filtered):
 
 
 
-def get_word_and_label(_content, start_w, end_w, isfilter_r, rel_be_filtered):
+def get_word_and_label(_content, start_w, end_w, rel_be_filtered):
     word_list = []
     ent_list = []
     rel_list = []
@@ -171,16 +173,17 @@ def get_word_and_label(_content, start_w, end_w, isfilter_r, rel_be_filtered):
             except IndexError:
                 rel_list.append(Schema.REL_NONE)
             else:
-                if isfilter_r==False:
-                    rel_list.append(word_set[2:])
-                    
-                else:
+                if rel_be_filtered:
                     reserved_rel = filter_relation(word_set[2:], rel_be_filtered)
                     rel_list.append(reserved_rel)
+                    
+                else:
+                    rel_list.append(word_set[2:])
+                
     
     return word_list, ent_list, rel_list
 
-def split_to_list(content, isfilter_r=False, rel_be_filtered=None):
+def split_to_list(content, rel_be_filtered=None):
     init = 0
     word_list = []
     ent_list = []
@@ -188,7 +191,7 @@ def split_to_list(content, isfilter_r=False, rel_be_filtered=None):
 
     for now_token, c in enumerate(content):
         if c == '':
-            words, ents, rels = get_word_and_label(content, init, now_token, isfilter_r, rel_be_filtered)
+            words, ents, rels = get_word_and_label(content, init, now_token, rel_be_filtered)
             init = now_token + 1
             word_list.append(words)
             ent_list.append(ents)

@@ -121,10 +121,7 @@ class JointERE(nn.Module):
             # rel_tensor[:,length, head~now ,:]
             rel_tensor[:,length,:length+1,:] = attn_weights
  
-        
-#         '''NLLLoss input: Input: (N,C) where C = number of classes'''
-#         return entity_tensor.view(batch_size*max_len, self.ent_size), \
-#                rel_tensor.view(batch_size*max_len*max_len, self.rel_size)
+
         
         return entity_tensor, rel_tensor
         

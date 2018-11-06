@@ -106,7 +106,7 @@ class BIOLoader(Data.DataLoader):
     '''
     def preprocess(self, data, word_to_ix, schema, rel_be_filtered=None):
         content = readfile(data)
-        sent_list, ent_list, rel_list = split_to_list(content, rel_be_filtered)
+        sent_list, ent_list, rel_list = split_to_list(content, schema, rel_be_filtered)
         word_to_ix = word_to_ix or word2index(sent_list)
         reserved_index = filter_len(sent_list, self.max_len)
         filter_word, filter_ent, filter_rel = filter_sentence(reserved_index, sent_list, ent_list, rel_list)
@@ -151,8 +151,41 @@ def filter_relation(word_set, rel_be_filtered):
         return reserved_rel
 
 
+    
+def filter_entity(word_set, rel_be_filtered, schema):
+    reserved_rel_type = schema.rel2ix.keys() - rel_be_filtered - {schema.REL_PAD,schema.REL_NONE}
+    reserved_tag = []
+    
+    for k,v in schema['relation'].items():
+        for single_r in reserved_rel_type:
+            if schema['relation'][k]['tag']==single_r:
+                reserved_tag.append(k)   
+                
+    reserved_arguments = []
+    for t in reserved_tag:
+        reserved_arguments.extend(list(schema['relation'][t]['arguments'].values()))
+        
+    reserved_arguments = list(set(reserved_arguments))
+    
+    reserved_ent_tag = []
+    for arg in reserved_arguments:
+        reserved_ent_tag.append(schema['entity'][arg]['tag'])
+    
+    
+    try:
+        testerror = word_set.split('-')[1]
+    except IndexError:
+        return 'O'
+    else:
+        if word_set.split('-')[1] in reserved_ent_tag:
+            return word_set
+        else:
+            return 'O'
+        
+    
 
-def get_word_and_label(_content, start_w, end_w, rel_be_filtered):
+
+def get_word_and_label(_content, start_w, end_w, rel_be_filtered, schema):
     word_list = []
     ent_list = []
     rel_list = []
@@ -166,7 +199,16 @@ def get_word_and_label(_content, start_w, end_w, rel_be_filtered):
         
         else:
             word_list.append(word_set[0])
-            ent_list.append(word_set[1])
+
+            
+            
+            if rel_be_filtered:
+                reserved_ent = filter_entity(word_set[1], rel_be_filtered, schema)
+                ent_list.append(reserved_ent)      
+            else:
+                ent_list.append(word_set[1])
+            
+            
 
             try:
                 testerror = word_set[2]
@@ -183,7 +225,7 @@ def get_word_and_label(_content, start_w, end_w, rel_be_filtered):
     
     return word_list, ent_list, rel_list
 
-def split_to_list(content, rel_be_filtered=None):
+def split_to_list(content, schema, rel_be_filtered=None):
     init = 0
     word_list = []
     ent_list = []
@@ -191,7 +233,7 @@ def split_to_list(content, rel_be_filtered=None):
 
     for now_token, c in enumerate(content):
         if c == '':
-            words, ents, rels = get_word_and_label(content, init, now_token, rel_be_filtered)
+            words, ents, rels = get_word_and_label(content, init, now_token, rel_be_filtered, schema)
             init = now_token + 1
             word_list.append(words)
             ent_list.append(ents)

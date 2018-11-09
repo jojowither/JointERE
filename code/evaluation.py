@@ -71,6 +71,12 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
     if rel_detail==True:
         check_true, check_pred = check_every_rel(y_rel_true_all, y_rel_pred_all, len(schema['relation']))
         show_every_rel_score(check_true, check_pred, schema)
+        
+        print('--test--')
+        er_score = precision_recall_fscore_support(y_rel_true_all, y_rel_pred_all, average=None, 
+                                           labels=range(len(schema['relation'])))[:-1]
+        print(er_score)
+        print()
                 
     return e_score, er_score
                 

@@ -69,14 +69,24 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
     
         
     if rel_detail==True:
-        check_true, check_pred = check_every_rel(y_rel_true_all, y_rel_pred_all, len(schema['relation']))
-        show_every_rel_score(check_true, check_pred, schema)
+#         check_true, check_pred = check_every_rel(y_rel_true_all, y_rel_pred_all, len(schema['relation']))
+#         show_every_rel_score(check_true, check_pred, schema)
         
-        print('--test--')
-        er_score = precision_recall_fscore_support(y_rel_true_all, y_rel_pred_all, average=None, 
+#         print('--test--')
+        all_er_score = precision_recall_fscore_support(y_rel_true_all, y_rel_pred_all, average=None, 
                                            labels=range(len(schema['relation'])))[:-1]
-        print(er_score)
-        print()
+#         print(er_score)
+#         print()
+        
+        for num_rel in range(len(schema['relation'])):
+            
+            print()
+            print('======================================================')
+            print('Relation type %d' % (num_rel))
+            print("%s \t %s \t %s \t" % ('precision ', 'recall ', 'fbeta_score '))
+            print('%.3f \t\t %.3f \t\t %.3f \t' % (er_score[0][num_rel], er_score[1][num_rel], er_score[2][num_rel]))
+            print()
+        
                 
     return e_score, er_score
                 

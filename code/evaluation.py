@@ -9,6 +9,7 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
     y_ent_true_all, y_ent_pred_all = [], []
     y_rel_true_all, y_rel_pred_all = [], []
     tps, fps, tns, fns = 0, 0, 0, 0
+    total_r_error = 0
     
     
     if silent:
@@ -29,21 +30,23 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             batchsize, max_len = batch_ent.size()
             
 
-            y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, *(score_num) = batch_decode(ent_output.cpu(), rel_output.cpu(),
-                                                                                    batch_index, data_loader.raw_input,
-                                                                                    batch_ent.cpu(), batch_rel.cpu(),
-                                                                                    schema, silent=silent)
+            r_err_count, *(score_num) = batch_decode(ent_output.cpu(), rel_output.cpu(), batch_index, data_loader.raw_input,
+                                                     batch_ent.cpu(), batch_rel.cpu(), schema, silent=silent)
+            
+            y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn = score_num
             
             y_ent_true_all.extend(y_true_ent)
             y_ent_pred_all.extend(y_pred_ent)
             y_rel_true_all.extend(y_true_rel)
             y_rel_pred_all.extend(y_pred_rel)
             
-            tp, fp, tn, fn = score_num
+            
             tps += tp
             fps += fp
             tns += tn
             fns += fn
+            
+            total_r_error += r_err_count
             
             
             
@@ -67,16 +70,18 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
     print('TP  \t fp  \t tn  \t fn')
     print('{:.0f} \t {:.0f} \t {:.0f} \t {:.0f} \t'.format(tps, fps, tns, fns))
     
+    print()
+    print('Relation error count: {:.0f}'.format(total_r_error))
+    
         
     if rel_detail==True:
 #         check_true, check_pred = check_every_rel(y_rel_true_all, y_rel_pred_all, len(schema['relation']))
 #         show_every_rel_score(check_true, check_pred, schema)
         
-#         print('--test--')
+
         all_er_score = precision_recall_fscore_support(y_rel_true_all, y_rel_pred_all, average=None, 
                                            labels=range(len(schema['relation'])))[:-1]
-#         print(er_score)
-#         print()
+
         
         for num_rel in range(len(schema['relation'])):
             
@@ -84,7 +89,7 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             print('======================================================')
             print('Relation type %d' % (num_rel))
             print("%s \t %s \t %s \t" % ('precision ', 'recall ', 'fbeta_score '))
-            print('%.3f \t\t %.3f \t\t %.3f \t' % (er_score[0][num_rel], er_score[1][num_rel], er_score[2][num_rel]))
+            print('%.3f \t\t %.3f \t\t %.3f \t' % (all_er_score[0][num_rel], all_er_score[1][num_rel], all_er_score[2][num_rel]))
             print()
         
                 
@@ -96,6 +101,7 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
     
     true_ent_lists, true_rel_lists = [], []
     pred_ent_lists, pred_rel_lists = [], []
+    rel_error_count = 0
     
     for e,r,i,te,tr in zip(ent_output, rel_output, batch_index, true_ent, true_rel):
         
@@ -117,6 +123,7 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
         
         # 出現error，跳過這句
         if appear_error:
+            rel_error_count+=1
             continue
         
         
@@ -182,7 +189,7 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
         print('===========================================') 
     
     
-    return y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn        
+    return rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn        
 
 
 

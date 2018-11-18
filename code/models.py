@@ -32,7 +32,7 @@ class JointERE(nn.Module):
         nn.init.normal_(self.word_embeds.weight.data)
         
 #         self.bilstm = nn.LSTM(embedding_dim, hidden_dim1 // 2,
-#                             num_layers=2, bidirectional=True, batch_first=True, dropout=0.2)        
+#                             num_layers=2, bidirectional=True, batch_first=True)        
         self.bilstm = nn.GRU(embedding_dim, hidden_dim1 // 2,
                             num_layers=2, bidirectional=True, batch_first=True, dropout=0.2)
     
@@ -111,11 +111,12 @@ class JointERE(nn.Module):
                     
             # relation layer
             encoder_sequence_l.append(torch.cat((h_next,label),1))  
-            encoder_sequence = torch.stack(encoder_sequence_l).transpose(0, 1)     #B*len*(es+LE)         
+            encoder_sequence = torch.stack(encoder_sequence_l).transpose(0, 1)     #B*len*(h2+LE)         
 
             # Calculate attention weights 
             attn_weights = self.attn(encoder_sequence)
       
+
             entity_tensor[:,length,:] = ent_output
             
             # rel_tensor[:,length, head~now ,:]
@@ -135,7 +136,7 @@ class JointERE(nn.Module):
         return RelationNLLLoss(ignore_index=pad_idx)
     
     
-    def fit(self, loader, dev_loader, optimizer=None, n_iter=50, stable_iter=10,
+    def fit(self, loader, dev_loader, optimizer=None, n_iter=50, stable_iter=10, true_ent=False,
             save_model=None):
         
         criterion_tag = self.entity_loss()
@@ -147,7 +148,11 @@ class JointERE(nn.Module):
                 self.train()
                 optimizer.zero_grad()
                 
-                ent_output, rel_output = self.forward(batch_x)
+                if true_ent:
+                    ent_output, rel_output = self.forward(batch_x, batch_ent)
+                
+                else:
+                    ent_output, rel_output = self.forward(batch_x)
                 
                 batch_loss_ent = criterion_tag(ent_output, batch_ent)
                 batch_loss_rel = criterion_rel(rel_output, batch_rel)    
@@ -215,30 +220,27 @@ class Attn(nn.Module):
         self.w1 = nn.Linear(self.attn_input, self.attn_output, bias=False)
         nn.init.xavier_normal_(self.w1.weight.data)
         self.w2 = nn.Linear(self.attn_input, self.attn_output, bias=False)
-        nn.init.xavier_normal_(self.w2.weight.data)
-        self.tanh = nn.Tanh()
+        nn.init.xavier_normal_(self.w2.weight.data)  
+        self.tanh = nn.Tanh()   
         self.v = nn.Linear(self.attn_output, self.rel_size, bias=False)
         nn.init.xavier_normal_(self.v.weight.data)
         
-        self.softmax = nn.LogSoftmax(dim=2)
+        self.softmax = nn.LogSoftmax(dim=-1)
         
         
     def forward(self, encoder_outputs):
+        batch_size = encoder_outputs.size(0)
         
         decoder = encoder_outputs[:,-1,:].unsqueeze(1)                       #B*1*(ts+LE) 
         encoder_score = self.w1(encoder_outputs)                             #B*now len*ATTN_OUT
         decoder_score = self.w2(decoder)                                     #B*1*ATTN_OUT
-        energy = self.tanh(encoder_score+decoder_score)                      #B*now len*ATTN_OUT            
+        energy = self.tanh(encoder_score+decoder_score)                      #B*now len*ATTN_OUT   
         
         energy = self.v(energy)                                              #B*now len*rel_size
         
+        p = self.softmax(energy)                        
         
-        # 針對每個entity做softmax，去顯示他們的關係權重
-        # 主要都會是rel_none
-        # 對第二維(rel)做softmax
-        p = self.softmax(energy)                                         #B*now len*rel_size
-        
-        return p
+        return p                                                             #B*now len*rel_size
     
     
     
@@ -257,9 +259,12 @@ class EntityNLLLoss(nn.NLLLoss):
                                                   labels.unsqueeze(1))
         return mean_sentence_loss(loss)
 
+
 class RelationNLLLoss(nn.NLLLoss):    
     def __init__(self, **kwargs):
-        super().__init__(reduction='none')
+        kwargs['reduction'] = 'none'
+        super().__init__(**kwargs)
+
         
     def forward(self, outputs, labels):
         loss = super(RelationNLLLoss, self).forward(outputs.permute(0,-1,1,2),labels)

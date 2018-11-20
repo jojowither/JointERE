@@ -32,7 +32,7 @@ class JointERE(nn.Module):
         nn.init.normal_(self.word_embeds.weight.data)
         
 #         self.bilstm = nn.LSTM(embedding_dim, hidden_dim1 // 2,
-#                             num_layers=2, bidirectional=True, batch_first=True)        
+#                             num_layers=2, bidirectional=True, batch_first=True, dropout=0.2)        
         self.bilstm = nn.GRU(embedding_dim, hidden_dim1 // 2,
                             num_layers=2, bidirectional=True, batch_first=True, dropout=0.2)
     
@@ -159,6 +159,10 @@ class JointERE(nn.Module):
                 batch_loss = batch_loss_ent + batch_loss_rel
 
                 batch_loss.backward()
+                
+                # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
+                torch.nn.utils.clip_grad_norm_(self.parameters(), 0.25)
+                
                 optimizer.step()
                 
             for batch_x, batch_ent, batch_rel, batch_index in dev_loader:
@@ -191,9 +195,9 @@ class JointERE(nn.Module):
         return entities, relations
 
     
-    def score(self, loader, isTrueEnt=False, silent=False, rel_detail=False):
+    def score(self, loader, isTrueEnt=False, silent=False, rel_detail=False, analyze=False):
         
-        e_score, er_score = evaluate_data(self, loader, self.schema, isTrueEnt, silent, rel_detail)
+        e_score, er_score = evaluate_data(self, loader, self.schema, isTrueEnt, silent, rel_detail, analyze)
         
         return e_score, er_score
     

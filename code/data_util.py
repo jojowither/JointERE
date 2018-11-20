@@ -23,11 +23,20 @@ class Schema(dict):
         self.ent2ix = EntTagDict(self)
         self.rel2ix = RelTagDict(self)
         
+        self.rid2tag = self.convert_rid()
+        
     def eid_from_tag_ix(self, ix):
         return self.ent2ix.ix_base_type(ix)
     
     def rid_from_tag_ix(self, ix):
         return self.rel2ix.ix_base_type(ix)
+    
+    def convert_rid(self):
+        convert_rid_dict = {}
+        for k,v in self['relation'].items():
+            convert_rid_dict[v['rid']] = v['tag']
+
+        return convert_rid_dict
 
 
 
@@ -76,6 +85,8 @@ class RelTagDict(TagDict):
 
     def ix_base_type(self, idx):
         return int(idx)
+    
+
 
 
 # ====================================================

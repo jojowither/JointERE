@@ -2,14 +2,21 @@ import numpy as np
 import torch
 from sklearn.metrics import precision_recall_fscore_support
 import warnings
+import matplotlib.pyplot as plt
 
 
-def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel_detail=False):
+def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel_detail=False, analyze=False):
     
     y_ent_true_all, y_ent_pred_all = [], []
     y_rel_true_all, y_rel_pred_all = [], []
     tps, fps, tns, fns = 0, 0, 0, 0
     total_r_error = 0
+    
+    anay_rel_true = {}
+    anay_rel_pred = {}
+    for i in range(len(schema['relation'])):
+        anay_rel_true[i]=[]
+        anay_rel_pred[i]=[]
     
     
     if silent:
@@ -30,8 +37,10 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             batchsize, max_len = batch_ent.size()
             
 
-            r_err_count, *(score_num) = batch_decode(ent_output.cpu(), rel_output.cpu(), batch_index, data_loader.raw_input,
-                                                     batch_ent.cpu(), batch_rel.cpu(), schema, silent=silent)
+            anay_true, anay_pred, r_err_count, *(score_num) = batch_decode(ent_output.cpu(), rel_output.cpu(), 
+                                                                           batch_index,  data_loader.raw_input, 
+                                                                           batch_ent.cpu(), batch_rel.cpu(), 
+                                                                           schema, silent=silent, analyze=analyze)
             
             y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn = score_num
             
@@ -44,9 +53,15 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             tps += tp
             fps += fp
             tns += tn
-            fns += fn
-            
+            fns += fn           
             total_r_error += r_err_count
+            
+            if analyze:
+                for r in anay_true:
+                    anay_rel_true[r].extend(anay_true[r])
+                for r in anay_pred:
+                    anay_rel_pred[r].extend(anay_pred[r])
+                    
             
             
             
@@ -91,17 +106,25 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             print("%s \t %s \t %s \t" % ('precision ', 'recall ', 'fbeta_score '))
             print('%.3f \t\t %.3f \t\t %.3f \t' % (all_er_score[0][num_rel], all_er_score[1][num_rel], all_er_score[2][num_rel]))
             print()
+            
+    if analyze:
+        draw_zone_distance(anay_rel_true, anay_rel_pred, schema)
         
                 
     return e_score, er_score
                 
                 
                 
-def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true_rel, schema, silent):
+def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true_rel, schema, silent, analyze):
     
     true_ent_lists, true_rel_lists = [], []
     pred_ent_lists, pred_rel_lists = [], []
     rel_error_count = 0
+
+    anay_true, anay_pred = {}, {}
+    for i in range(len(schema['relation'])):
+        anay_true[i]=[]
+        anay_pred[i]=[]
     
     for e,r,i,te,tr in zip(ent_output, rel_output, batch_index, true_ent, true_rel):
         
@@ -120,11 +143,10 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
         true_r_list, appear_error = decode_rel(true_ent, tr, schema)  
         pred_r_list, appear_error = decode_rel(predict_ent, r, schema)      
         
-        
         # 出現error，跳過這句
         if appear_error:
             rel_error_count+=1
-            continue
+#             continue
         
         
         true_r_list = [list(set(i)) if type(i) is list else i for i in true_r_list]
@@ -134,9 +156,10 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
         pred_r_list = pred_r_list[:len_of_list]
         
         
-        
         true_rel_list = decode_rel_to_eval(true_r_list, schema, true_ent_list)
         pred_rel_list = decode_rel_to_eval(pred_r_list, schema, pred_ent_list)
+        
+
         
         true_ent_lists.append(true_ent_list)
         pred_ent_lists.append(pred_ent_list)
@@ -161,6 +184,16 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
             print(pred_ent_list)
             print(pred_rel_list)
             print("=====================================")
+            
+        
+        if analyze:
+            analyze_dict_true = calculate_distance(true_rel_list)   
+            analyze_dict_pred = calculate_distance(pred_rel_list) 
+            for r in analyze_dict_true:
+                anay_true[r].extend(analyze_dict_true[r])
+            for r in analyze_dict_pred:
+                anay_pred[r].extend(analyze_dict_pred[r])
+            
         
 
 
@@ -189,7 +222,7 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
         print('===========================================') 
     
     
-    return rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn        
+    return anay_true, anay_pred, rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn        
 
 
 
@@ -357,7 +390,14 @@ def decode_rel(ent_output, rel_output, schema):
             
             # B tag後面的tag的關係，依照前面的關係複製
             elif rel!=schema.rel2ix[schema.REL_NONE] and IsNext:
-                r_list[now] = r_list[now-1]
+                
+                # IndexError: list assignment index out of range
+                try:
+                    r_list[now] = r_list[now-1]
+                except IndexError:
+                    rel_keyerror = True   # 暫時沿用keyerror
+                    break
+                
                 
                 
             else:
@@ -369,7 +409,7 @@ def decode_rel(ent_output, rel_output, schema):
 
         
         if rel_keyerror:
-            rel_keyerror = False
+            appear_error = True
             break
                 
                 
@@ -628,4 +668,163 @@ def show_every_rel_score(check_true, check_pred, schema):
         print('%.3f \t\t %.3f \t\t %.3f \t' % (each_scores[0], each_scores[1], each_scores[2]))
         print()
 
-                
+
+        
+# ===================================================================        
+        
+        
+def analyze_loader(data_loader, schema, silent=False):
+    
+    all_rel = {}
+    for i in range(len(schema['relation'])):
+        all_rel[i]=[]
+    
+    for batch_x, batch_ent, batch_rel, batch_index in data_loader:
+        batch_rel, rel_error_count = analyze_batch(batch_index, data_loader.raw_input,batch_ent.cpu(), 
+                                                  batch_rel.cpu(), schema, silent=silent)
+        
+        for r in batch_rel:
+            all_rel[r].extend(batch_rel[r])
+    
+#     print(all_rel)
+    
+    return all_rel
+        
+        
+        
+def analyze_batch(batch_index, word_lists, true_ent, true_rel, schema, silent):
+    
+    rel_error_count=0
+    batch_rel = {}
+    for i in range(len(schema['relation'])):
+        batch_rel[i]=[]
+  
+    
+    for i,te,tr in zip(batch_index, true_ent, true_rel):
+         # 算句子長度
+        len_of_list = len(word_lists[i])
+        word_list = word_lists[i]
+        
+        true_ent = [schema.ent2ix.inv(i) for i in te[:len_of_list]]     
+        true_ent_list, _ = decode_ent(te[:len_of_list], schema)   
+        true_r_list, appear_error = decode_rel(true_ent, tr, schema)  
+        
+        # 出現error，跳過這句
+        if appear_error:
+            rel_error_count+=1
+            continue
+            
+        true_r_list = [list(set(i)) if type(i) is list else i for i in true_r_list]
+        true_r_list = true_r_list[:len_of_list]
+        true_rel_list = decode_rel_to_eval(true_r_list, schema, true_ent_list)
+     
+        
+        if not silent:
+            print(word_list)
+            print(true_ent)
+            print(true_r_list)
+            print()
+
+            print()
+            print('True')
+            print(true_ent_list)
+            print(true_rel_list)
+            
+            print("=====================================")
+            
+        analyze_dict = calculate_distance(true_rel_list)    
+        for r in analyze_dict:
+            batch_rel[r].extend(analyze_dict[r])
+            
+#     print(batch_rel)
+    return batch_rel, rel_error_count
+        
+        
+        
+        
+            
+            
+def calculate_distance(true_rel_list):
+    analyze_dict = {}
+    
+    for r_triplet in true_rel_list:
+        distant = r_triplet[1][0] - r_triplet[0][0]
+        r_type = r_triplet[2]
+        
+        if r_type in analyze_dict:
+            analyze_dict[r_type].append(distant)
+        else:
+            analyze_dict[r_type] = [distant]
+        
+        
+#     print(analyze_dict)
+    
+    return analyze_dict      
+        
+        
+
+
+def draw_zone_distance(anay_rel_true, anay_rel_pred, schema):
+    
+    zone_block_list = ['1~5', '6~10', '11~15', '16~20', '21~30', '31~40', '41~50', '50up']
+    
+    plt.subplots(3,2,figsize=(15,15))
+    for r_type in anay_rel_true:
+        
+        zone_block_t = record_zone(anay_rel_true, r_type)
+        zone_block_p = record_zone(anay_rel_pred, r_type)
+
+        
+        print(zone_block_t)
+        print(zone_block_p)
+        print()
+        
+        plt.subplot(320+r_type+1)
+
+        for i, block_range in enumerate(zone_block_list):
+            t_bar = plt.bar(i, zone_block_t[block_range], facecolor='#9999ff', edgecolor='white', width=0.5) 
+            p_bar = plt.bar(i+0.2, zone_block_p[block_range], facecolor='#FF8888', edgecolor='white', width=0.5) 
+            
+            plt.text(i, zone_block_t[block_range], 
+                     '{:.2f} %'.format(zone_block_t[block_range]/len(anay_rel_true[r_type])*100), ha='center', va= 'bottom')
+            
+            
+            if len(anay_rel_pred[r_type])==0:
+                len_of_anay_rel_pred = 1
+            else:
+                len_of_anay_rel_pred = len(anay_rel_pred[r_type]) 
+            plt.text(i+0.2, zone_block_p[block_range], 
+                     '{:.2f} %'.format(zone_block_p[block_range]/len_of_anay_rel_pred*100), ha='center', va= 'bottom')
+            
+            
+            
+        plt.xticks(range(len(zone_block_list)), zone_block_list) 
+        plt.ylim(top=plt.ylim()[1]+5)
+        plt.xlabel('The entity pair\'s distance in {}'.format(schema.rid2tag[r_type]))
+        plt.ylabel('The number of entity pair in the zone')
+        plt.legend((t_bar[0], p_bar[0]), ('True relation', 'Predict relation'))
+        
+        
+def record_zone(anay_rel, r_type):
+    zone_block = {'1~5':0, '6~10':0, '11~15':0, '16~20':0, 
+                  '21~30':0, '31~40':0, '41~50':0, '50up':0}
+    
+    for r_dist in anay_rel[r_type]:
+        if r_dist<=5:
+            zone_block['1~5']+=1
+        elif r_dist<=10:
+            zone_block['6~10']+=1
+        elif r_dist<=15:
+            zone_block['11~15']+=1
+        elif r_dist<=20:
+            zone_block['16~20']+=1
+        elif r_dist<=30:
+            zone_block['21~30']+=1
+        elif r_dist<=40:
+            zone_block['31~40']+=1
+        elif r_dist<=50:
+            zone_block['41~50']+=1
+        else:
+            zone_block['50up']+=1
+            
+    return zone_block

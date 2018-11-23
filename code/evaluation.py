@@ -14,9 +14,11 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
     
     anay_rel_true = {}
     anay_rel_pred = {}
+    anay_rel_pospred = {}
     for i in range(len(schema['relation'])):
         anay_rel_true[i]=[]
         anay_rel_pred[i]=[]
+        anay_rel_pospred[i]=[]
     
     
     if silent:
@@ -37,7 +39,7 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             batchsize, max_len = batch_ent.size()
             
 
-            anay_true, anay_pred, r_err_count, *(score_num) = batch_decode(ent_output.cpu(), rel_output.cpu(), 
+            anay_true, anay_pred, anay_pospred, r_err_count, *(score_num) = batch_decode(ent_output.cpu(), rel_output.cpu(), 
                                                                            batch_index,  data_loader.raw_input, 
                                                                            batch_ent.cpu(), batch_rel.cpu(), 
                                                                            schema, silent=silent, analyze=analyze)
@@ -61,6 +63,8 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
                     anay_rel_true[r].extend(anay_true[r])
                 for r in anay_pred:
                     anay_rel_pred[r].extend(anay_pred[r])
+                for r in anay_pospred:
+                    anay_rel_pospred[r].extend(anay_pospred[r])
                     
             
             
@@ -108,7 +112,7 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
             print()
             
     if analyze:
-        draw_zone_distance(anay_rel_true, anay_rel_pred, schema)
+        draw_zone_distance(anay_rel_true, anay_rel_pred, anay_rel_pospred, schema)
         
                 
     return e_score, er_score
@@ -121,10 +125,11 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
     pred_ent_lists, pred_rel_lists = [], []
     rel_error_count = 0
 
-    anay_true, anay_pred = {}, {}
+    anay_true, anay_pred, anay_pospred = {}, {}, {}    # add postive relation
     for i in range(len(schema['relation'])):
         anay_true[i]=[]
         anay_pred[i]=[]
+        anay_pospred[i]=[]
     
     for e,r,i,te,tr in zip(ent_output, rel_output, batch_index, true_ent, true_rel):
         
@@ -187,12 +192,19 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
             
         
         if analyze:
+            postive_predict_rel = list(set(true_rel_list).intersection(pred_rel_list))
+            
             analyze_dict_true = calculate_distance(true_rel_list)   
             analyze_dict_pred = calculate_distance(pred_rel_list) 
+            analyze_dict_pos_pred = calculate_distance(postive_predict_rel) 
+            
             for r in analyze_dict_true:
                 anay_true[r].extend(analyze_dict_true[r])
             for r in analyze_dict_pred:
                 anay_pred[r].extend(analyze_dict_pred[r])
+            for r in analyze_dict_pos_pred:
+                anay_pospred[r].extend(analyze_dict_pos_pred[r])
+                
             
         
 
@@ -222,7 +234,7 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
         print('===========================================') 
     
     
-    return anay_true, anay_pred, rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn        
+    return anay_true, anay_pred, anay_pospred, rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn        
 
 
 
@@ -764,7 +776,7 @@ def calculate_distance(true_rel_list):
         
 
 
-def draw_zone_distance(anay_rel_true, anay_rel_pred, schema):
+def draw_zone_distance(anay_rel_true, anay_rel_pred, anay_rel_pospred, schema):
     
     zone_block_list = ['1~5', '6~10', '11~15', '16~20', '21~30', '31~40', '41~50', '50up']
     
@@ -773,28 +785,31 @@ def draw_zone_distance(anay_rel_true, anay_rel_pred, schema):
         
         zone_block_t = record_zone(anay_rel_true, r_type)
         zone_block_p = record_zone(anay_rel_pred, r_type)
+        zone_block_pp = record_zone(anay_rel_pospred, r_type)  # postive predict
 
         
         print(zone_block_t)
         print(zone_block_p)
+        print(zone_block_pp)
         print()
         
         plt.subplot(320+r_type+1)
 
         for i, block_range in enumerate(zone_block_list):
-            t_bar = plt.bar(i, zone_block_t[block_range], facecolor='#9999ff', edgecolor='white', width=0.5) 
-            p_bar = plt.bar(i+0.2, zone_block_p[block_range], facecolor='#FF8888', edgecolor='white', width=0.5) 
-            
-            plt.text(i, zone_block_t[block_range], 
-                     '{:.2f} %'.format(zone_block_t[block_range]/len(anay_rel_true[r_type])*100), ha='center', va= 'bottom')
+            t_bar = plt.bar(i-0.2, zone_block_t[block_range], facecolor='#9999ff', edgecolor='white', width=0.5) 
+            p_bar = plt.bar(i, zone_block_p[block_range], facecolor='#FF8888', edgecolor='white', width=0.5) 
+            pp_bar = plt.bar(i+0.2, zone_block_pp[block_range], facecolor='#48D1CC', edgecolor='white', width=0.5) 
             
             
-            if len(anay_rel_pred[r_type])==0:
-                len_of_anay_rel_pred = 1
-            else:
-                len_of_anay_rel_pred = len(anay_rel_pred[r_type]) 
-            plt.text(i+0.2, zone_block_p[block_range], 
-                     '{:.2f} %'.format(zone_block_p[block_range]/len_of_anay_rel_pred*100), ha='center', va= 'bottom')
+#             plt.text(i, zone_block_t[block_range], 
+#                      '{:.2f} %'.format(zone_block_t[block_range]/len(anay_rel_true[r_type])*100), ha='center', va= 'bottom')
+          
+#             if len(anay_rel_pred[r_type])==0:
+#                 len_of_anay_rel_pred = 1
+#             else:
+#                 len_of_anay_rel_pred = len(anay_rel_pred[r_type]) 
+#             plt.text(i+0.2, zone_block_p[block_range], 
+#                      '{:.2f} %'.format(zone_block_p[block_range]/len_of_anay_rel_pred*100), ha='center', va= 'bottom')
             
             
             
@@ -802,7 +817,7 @@ def draw_zone_distance(anay_rel_true, anay_rel_pred, schema):
         plt.ylim(top=plt.ylim()[1]+5)
         plt.xlabel('The entity pair\'s distance in {}'.format(schema.rid2tag[r_type]))
         plt.ylabel('The number of entity pair in the zone')
-        plt.legend((t_bar[0], p_bar[0]), ('True relation', 'Predict relation'))
+        plt.legend((t_bar[0], p_bar[0], pp_bar[0]), ('True relation', 'Predict relation', 'True Predict relation'))
         
         
 def record_zone(anay_rel, r_type):

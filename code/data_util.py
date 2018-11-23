@@ -4,6 +4,7 @@ import torch.utils.data as Data
 import numpy as np
 import copy
 import json
+import pickle
 
 class Schema(dict):
     '''Parse and Represent Schema of Knowledge'''
@@ -96,8 +97,20 @@ class BIOLoader(Data.DataLoader):
     def __init__(self, data_path, max_len, batch_size, schema, rel_be_filtered=None, 
                  word_to_ix=None, shuffle=False, device=torch.device('cpu')):
         self.max_len = max_len
+    
+        w2ix_path = None
+        if isinstance(word_to_ix, str):
+            w2ix_path, word_to_ix = word_to_ix, None
+            with open(w2ix_path, 'rb') as fin:
+                word_to_ix = pickle.load(fin)
                 
-        results = self.preprocess(data_path, word_to_ix, schema, rel_be_filtered)
+                
+        self.word_to_ix, self.vocab_size, self.raw_input, *results = self.preprocess(data_path, 
+                                                                      word_to_ix, schema, rel_be_filtered)
+        
+        if w2ix_path is not None and word_to_ix is None:
+            with open(w2ix_path, 'wb') as fout:
+                pickle.dump(self.word_to_ix, fout)
                                                                      
         torch_dataset = Data.TensorDataset(*(x.to(device) for x in results))
         
@@ -128,14 +141,13 @@ class BIOLoader(Data.DataLoader):
         ent_var = prepare_all(ent_padded, schema.ent2ix)
         rel_var = prepare_rel(rel_padded, schema.rel2ix, self.max_len)
         #================================================
-        self.word_to_ix = word_to_ix
-        self.vocab_size = len(word_to_ix)
-        self.raw_input = sent_list
+
 
         reserved_index = torch.from_numpy(np.asarray(reserved_index))
         
+        
+        return word_to_ix, len(word_to_ix), sent_list, input_var, ent_var, rel_var, reserved_index
 
-        return input_var, ent_var, rel_var, reserved_index
 
 
 

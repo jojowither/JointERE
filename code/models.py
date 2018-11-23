@@ -155,8 +155,10 @@ class JointERE(nn.Module):
                     ent_output, rel_output = self.forward(batch_x)
                 
                 batch_loss_ent = criterion_tag(ent_output, batch_ent)
-                batch_loss_rel = criterion_rel(rel_output, batch_rel)    
+                batch_loss_rel = criterion_rel(rel_output, batch_rel)  
                 batch_loss = batch_loss_ent + batch_loss_rel
+                
+                
 
                 batch_loss.backward()
                 

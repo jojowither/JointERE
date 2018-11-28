@@ -6,6 +6,23 @@ import matplotlib.pyplot as plt
 
 
 def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel_detail=False, analyze=False):
+    '''
+    Evaluate model predictions from data_loader with P/R/F-1 scores
+    
+    Input:
+        model: an instance of models.JointERE
+        data_loader: an instance of torch.utils.data.DataLoader
+        schema: an instance of data_util.Schema
+        isTrueEnt: optional. Boolean to give the ground truth entity to evaluate
+        silent: optional. Boolean to suppress detailed decoding
+        rel_detail: optional. Boolean to show the each relation's precision, recall and F1 score.
+        analyze: optional. Boolean to draw the distribution of distance of entity pair in predict.
+        
+    Output:
+        e_score: a tuple of P/R/F-1 score of entity prediction
+        er_scores: a list of tuples of P/R/F-1 score of entity+relation,
+            which has length corresponding to number of threshold
+    '''
     
     y_ent_true_all, y_ent_pred_all = [], []
     y_rel_true_all, y_rel_pred_all = [], []
@@ -120,6 +137,50 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
                 
                 
 def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true_rel, schema, silent, analyze):
+    '''
+    Aggregate serialized true/predicted class from batch data and model predictions
+    
+    Input:
+        ent_output:
+        rel_output:
+            raw model predictions
+        batch_index:
+            current index to the raw input sentences
+        wordlists:
+            the raw input sentences in characters
+        true_ent:
+        true_rel:
+            ground truth for training model
+        schema:
+            an instance of data_util.Schema
+        silent: optional.
+            Boolean to suppress detailed decoding
+        analyze: optional. 
+            Boolean to draw the distribution of distance of entity pair in predict.
+            
+    Output:
+        anay_true, anay_pred, anay_pospred, rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn   
+        anay_true:
+            a 2-dimension list with each relation type and the distance of each entity pair in true data.
+        anay_pred:
+            a 2-dimension list with each relation type and the distance of each entity pair in predict.
+        anay_pospred:
+            a 2-dimension list with each relation type and the distance of each entity pair 
+            in predict and the distance is true.
+        rel_error_count:
+            the number of error relation
+        y_true_ent:
+        y_pred_ent:
+            a list of char.-offset aligned entity class
+        y_true_rel_list:
+            a list of entity-pair aligned relation class
+        y_pred_rel_list:
+            a list of lists of entity-pair aligned relation class,
+            predicted with and ordered as in parameter thresholds
+        
+        tp, fp, tn, fn : the number of true postive, false postive, true negtive, false negtive
+        
+    '''
     
     true_ent_lists, true_rel_lists = [], []
     pred_ent_lists, pred_rel_lists = [], []
@@ -244,8 +305,12 @@ def ent_argmax(output):
 def rel_argmax(output):
     output = output.argmax(-1)
     return output              
-                
-                
+               
+    
+# ==================================================
+# Decoding utilities
+# ==================================================
+   
 def decode_ent(ent_output, schema):
     '''
     Aggregate entities from predicted tags
@@ -256,6 +321,7 @@ def decode_ent(ent_output, schema):
     ent_list=[(ent_start, ent_end, ent_type=eid_in_schema)]
     err_count=the number of bad tags
     '''
+    
     ent_list = []
     ent_start = 0
     ent_end = 0
@@ -312,6 +378,10 @@ def decode_ent(ent_output, schema):
 
 
 def decode_rel(ent_output, rel_output, schema):
+    '''
+    Input predictions ent_list (tuples) and rel_output (tensor of rel. pointers)
+    Output rel_list = [(e1, e2, rid)] with e1, e2 in ent_list and rid in schema
+    '''
 
     r_list, r_dict, appear_error = create_rel_info(ent_output) 
     
@@ -558,7 +628,9 @@ def get_rid_from_tag(tag, schema):
 
 
 
-
+# ==================================================
+# Scorers
+# ==================================================
         
         
 def get_scores(true_lists, pred_lists, labels, output_y=False):
@@ -752,7 +824,7 @@ def analyze_batch(batch_index, word_lists, true_ent, true_rel, schema, silent):
     return batch_rel, rel_error_count
         
         
-        
+# ===================================================================          
         
             
             

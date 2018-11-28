@@ -7,7 +7,10 @@ import json
 import pickle
 
 class Schema(dict):
-    '''Parse and Represent Schema of Knowledge'''
+    '''
+    Parse and Represent Schema of Knowledge, and provide conversion between 
+    tags representations and entity/relation indexes.
+    '''
     
     UNKOWN_TAG = "<UNKNOWN>"
     PAD_TAG = "<PAD>"
@@ -15,6 +18,14 @@ class Schema(dict):
     REL_NONE = 'Rel-None'
     
     def __init__(self, schema_data):
+        '''
+        Parse schema dictionary file and construct TagDict for tag/index 
+        conversion, as well as type lookup from index of tag.
+        Input:
+            schema_data:
+                The path to schema dictionary file
+        '''
+        
         raw_dict = "".join(readfile(schema_data))
         dict2json = "".join(raw_dict.split()[2:])
 
@@ -27,9 +38,27 @@ class Schema(dict):
         self.rid2tag = self.convert_rid()
         
     def eid_from_tag_ix(self, ix):
+        '''
+        Provide lookup of entity id from index of tag
+        Input:
+            ix:
+                An index of entity tag
+        Output:
+            entity id with respect to ix
+        '''
+        
         return self.ent2ix.ix_base_type(ix)
     
     def rid_from_tag_ix(self, ix):
+        '''
+        Provide lookup of relation id from index of tag
+        Input:
+            ix:
+                An index of relation tag
+        Output:
+            relation id with respect to ix
+        '''
+            
         return self.rel2ix.ix_base_type(ix)
     
     def convert_rid(self):
@@ -42,6 +71,10 @@ class Schema(dict):
 
 
 class TagDict(dict):
+    '''
+    Base tag-index dictionary data structure
+    It also stores a list to provide index-tag lookup.
+    '''
 
     def __init__(self, schema):
         self.tags = self.define(schema)
@@ -59,6 +92,15 @@ class TagDict(dict):
 class EntTagDict(TagDict):
 
     def define(self, schema):
+        '''
+        Define entity tags in presumed BIO scheme.
+        Input:
+            schema:
+                An instance of data_util.Schema
+        Output:
+            bio_tags:
+                A list of tags of Begining/Intermediate of entity and non-entity
+        '''
 
         tag_type = list(schema['tagging'])
         entity_tag = [ent['tag'] for ent in schema['entity'].values()]
@@ -74,6 +116,11 @@ class EntTagDict(TagDict):
         return bio_tags
 
     def ix_base_type(self, idx):
+        '''
+        Infer base entity type from index of entity BIO tag as the construction
+        sequence in define().
+        '''
+        
         return int(idx - 1) % (len(self) // 2 - 1)
 
 class RelTagDict(TagDict):
@@ -96,6 +143,32 @@ class BIOLoader(Data.DataLoader):
     
     def __init__(self, data_path, max_len, batch_size, schema, rel_be_filtered=None, 
                  word_to_ix=None, shuffle=False, device=torch.device('cpu')):
+        
+        '''
+        Load corpus and dictionary if available to initiate a torch DataLoader
+        Input:
+            data_path:
+                The string of path to BIO-format corpus.
+            max_len:
+                The maximal tokens allowed in a sentence.
+            batch_size:
+                The batch_size parameter as a torch DataLoader.
+            schema:
+                An instance of data_util.Schema
+            rel_be_filtered:
+                Select the relation you want to filter out in the experiment.
+            word_to_ix: optional
+                The word (token) dictionary to index. Use the dict to map sentences
+                into indexed sequences if provided, or try to load it from disk if 
+                the path is provided.
+                If the dictionary does not present in the path, this class would
+                write the newly parsed dictionary to the path.
+            shuffle: optional
+                The shuffle parameter as a torch Dataloader.
+            device: optional
+                The device at which the dataset is going to be loaded.
+        '''
+        
         self.max_len = max_len
     
         w2ix_path = None
@@ -353,6 +426,12 @@ def prepare_all(seqs, to_ix):
 
 
 def prepare_rel(rel_padded, to_ix, max_len):
+    '''
+    Prepare relation label data structure
+    Output:
+        rel_ptr: BATCH*LEN*LEN
+            Labels for whether a relation exists from the former to the later token
+    '''
     
     rel_ptr = torch.zeros(len(rel_padded), max_len, max_len, dtype=torch.long) 
     

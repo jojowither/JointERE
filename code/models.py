@@ -12,6 +12,27 @@ from evaluation import evaluate_data, decode_ent, decode_rel
 class JointERE(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim1, hidden_dim2, \
                  label_embed_dim, attn_output, schema):
+        '''
+        JointERE
+            Joint Entity and Relation mention Extraction on Traditional Chinese text
+        Input:
+            vocab_size:
+                The number of all the indexed vocabularies or the total token embeddings
+            embedding_dim:
+                The dimension of each token embedding
+            hidden_dim1:
+                The dimension of the hidden state of the bidirection LSTM for input sentences
+            hidden_dim2:
+                The dimension of the top hidden LSTM layer for aggregation of sentence features
+                and entity embeddings
+            label_embed_dim:
+                The dimension of embedding of each entity tag
+            attn_output:
+                The column dimension of the value matrix in the pointer network
+            schema:
+                An instance of data_util.Schema with definition of entities and relations
+        '''
+        
         
         super(JointERE, self).__init__()
         self.embedding_dim = embedding_dim                   #E
@@ -70,6 +91,7 @@ class JointERE(nn.Module):
     
         
     def forward(self, sentence, batch_ent=None):
+        '''Assume I/O resides on the same device, and so does this module'''
         
         batch_size, max_len = sentence.size()
         entity_tensor = torch.zeros(batch_size, max_len, self.ent_size, device=sentence.device)  #B*ML*es
@@ -139,6 +161,28 @@ class JointERE(nn.Module):
     def fit(self, loader, dev_loader, optimizer=None, n_iter=50, stable_iter=10, true_ent=False,
             save_model=None):
         
+        '''
+        Fit JointERE and select paramteres based on validation score
+        Input:
+            loader:
+                The instance of data_util.BIOLoader containing training data
+            dev_loader:
+                The instance of data_util.BIOLoader containing development/validation data
+            optimizer: optional
+                An specified optimizer from torch.optim for training model.
+                By default Adam(lr=0.01, weight_decay=1e-4, amsgrad=True) would be used.
+            n_iter: optional
+                The total traing epochs to fit and search the best model.
+                The default value is 50 epochs.
+            stable_iter: optional
+                The epoch after which the model begins to evaluate and select model.
+                The default value is 10 epochs.
+            save_model: optional
+                The path to store model parameters during model selection
+                If unspecified, the path defaults to 'checkpoints/relation_extraction_best.{time}.pkl'
+        '''
+            
+        
         criterion_tag = self.entity_loss()
         criterion_rel = self.relation_loss()
         optimizer = optimizer or optim.Adam(self.parameters(), lr=0.01, weight_decay=1e-4, amsgrad=True)
@@ -184,6 +228,25 @@ class JointERE(nn.Module):
     
     
     def predict(self, X):
+        
+        '''
+        Predict entity and relation mentions
+        
+        Input:
+            X: a batch*max_len array/tensor of indexed sentences
+            threshold: a float of relation detection threshold
+        Output:
+            entities: a list of entity mention sets in the batch.
+                A entity mention set is a list of tuples with start/end
+                offset and the entity type id from schema.
+                [(ent_start, ent_end, ent_type=eid_in_schema)]
+            relations: a list of relation mention sets in the batch.
+                A relation mention set is a list of tuples with
+                subject/object argument of entity and relation type
+                id from schema.
+                [(e1, e2, rid)]
+        '''
+            
         entities, relations = [], []
         self.eval()
         ent_outputs, rel_outputs = self.forward(X)
@@ -198,6 +261,18 @@ class JointERE(nn.Module):
 
     
     def score(self, loader, isTrueEnt=False, silent=False, rel_detail=False, analyze=False):
+        '''
+        Compute Precision/Recall/F-1 score of dataset in BIOLoader X
+        Input:
+            loader: a BIOLoader containing a dataset of sentences.
+            isTrueEnt: optional. Boolean to give the ground truth entity to evaluate
+            silent: optional. Boolean to suppress detailed decoding
+            rel_detail: optional. Boolean to show the each relation's precision, recall and F1 score.
+            analyze: optional. Boolean to draw the distribution of distance of entity pair in predict.
+        Output:
+            e_score: P/R/F-1 score of entity prediction
+            er_score: P/R/F-1 score of entity and relation prediction
+        '''
         
         e_score, er_score = evaluate_data(self, loader, self.schema, isTrueEnt, silent, rel_detail, analyze)
         

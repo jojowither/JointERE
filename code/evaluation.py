@@ -159,7 +159,7 @@ def batch_decode(ent_output, rel_output, batch_index, word_lists, true_ent, true
             Boolean to draw the distribution of distance of entity pair in predict.
             
     Output:
-        anay_true, anay_pred, anay_pospred, rel_error_count, y_true_ent, y_pred_ent, y_true_rel, y_pred_rel, tp, fp, tn, fn   
+         
         anay_true:
             a 2-dimension list with each relation type and the distance of each entity pair in true data.
         anay_pred:

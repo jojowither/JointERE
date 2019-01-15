@@ -110,6 +110,9 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
     print('Relation error count: {:.0f}'.format(total_r_error))
     
         
+    if analyze:
+        draw_zone_distance(anay_rel_true, anay_rel_pred, anay_rel_pospred, schema)
+        
     if rel_detail==True:
 #         check_true, check_pred = check_every_rel(y_rel_true_all, y_rel_pred_all, len(schema['relation']))
 #         show_every_rel_score(check_true, check_pred, schema)
@@ -121,18 +124,17 @@ def evaluate_data(model, data_loader, schema, isTrueEnt=False, silent=False, rel
         
         for num_rel in range(len(schema['relation'])):
             
-            print()
             print('======================================================')
             print('Relation type %d' % (num_rel))
             print("%s \t %s \t %s \t" % ('precision ', 'recall ', 'fbeta_score '))
             print('%.3f \t\t %.3f \t\t %.3f \t' % (all_er_score[0][num_rel], all_er_score[1][num_rel], all_er_score[2][num_rel]))
             print()
             
-    if analyze:
-        draw_zone_distance(anay_rel_true, anay_rel_pred, anay_rel_pospred, schema)
-        
-                
-    return e_score, er_score
+
+        return e_score, er_score, all_er_score
+    
+    else:            
+    	return e_score, er_score
                 
                 
                 
@@ -860,10 +862,9 @@ def draw_zone_distance(anay_rel_true, anay_rel_pred, anay_rel_pospred, schema):
         zone_block_pp = record_zone(anay_rel_pospred, r_type)  # postive predict
 
         
-        print(zone_block_t)
-        print(zone_block_p)
-        print(zone_block_pp)
-        print()
+#         print(zone_block_t)
+#         print(zone_block_p)
+#         print(zone_block_pp)
         
         plt.subplot(320+r_type+1)
 
